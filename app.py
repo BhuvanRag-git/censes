@@ -7,8 +7,8 @@ from pymongo import MongoClient
 # -------------------------
 MONGO_URI = "mongodb+srv://ragbhuvan_db_user:Bhuvanrag123@cluster0.vhjf9di.mongodb.net/census_database"
 client = MongoClient(MONGO_URI)
-db = client["census_data"]
-collection = db["fact_census"]
+db = client["census_database"]
+collection = db["census_data"]
 
 st.set_page_config(page_title="Census Dashboard", layout="wide")
 
@@ -296,4 +296,5 @@ df19 = run_query([
     }}
 ])
 st.dataframe(df19)
+
 
