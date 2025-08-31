@@ -1,147 +1,298 @@
 import streamlit as st
-from pymongo import MongoClient
 import pandas as pd
+from pymongo import MongoClient
 
-# ---------------- MongoDB Connection ----------------
+# -------------------------
+# MongoDB Connection
+# -------------------------
 MONGO_URI = "mongodb+srv://ragbhuvan_db_user:Bhuvanrag123@cluster0.vhjf9di.mongodb.net/census_database"
 client = MongoClient(MONGO_URI)
-db = client["census_databse"]   # change if needed
+db = client["census_database"]
 collection = db["fact_census"]
+
+st.set_page_config(page_title="Census Dashboard", layout="wide")
 
 st.title("📊 Census Dashboard (MongoDB Atlas)")
 
-# Helper to run pipelines
-def run_pipeline(pipeline):
-    return pd.DataFrame(list(collection.aggregate(pipeline)))
+# Helper to run aggregation and return DataFrame
+def run_query(pipeline):
+    docs = list(collection.aggregate(pipeline))
+    if not docs:
+        return pd.DataFrame()
+    return pd.DataFrame(docs)
 
-# ---------------- Queries ----------------
 
-# 1. Total population of each district
+# -------------------------
+# Query 1: Total population of each district
+# -------------------------
 st.subheader("1️⃣ Total population of each district")
-pipeline = [{"$group": {"_id": "$district", "total_population": {"$sum": "$population"}}}]
-st.dataframe(run_pipeline(pipeline))
+df1 = run_query([
+    {"$group": {"_id": "$District name", "Total_Population": {"$sum": "$Population"}}}
+])
+st.dataframe(df1)
 
-# 2. Literate males and females in each district
+
+# -------------------------
+# Query 2: Literate males and females in each district
+# -------------------------
 st.subheader("2️⃣ Literate males and females in each district")
-pipeline = [{"$group": {"_id": "$district",
-                        "literate_males": {"$sum": "$literate_male"},
-                        "literate_females": {"$sum": "$literate_female"}}}]
-st.dataframe(run_pipeline(pipeline))
+df2 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "Literate_Males": {"$sum": "$Male_Literate"},
+        "Literate_Females": {"$sum": "$Female_Literate"}
+    }}
+])
+st.dataframe(df2)
 
-# 3. Percentage of workers in each district
+
+# -------------------------
+# Query 3: Percentage of workers in each district
+# -------------------------
 st.subheader("3️⃣ Percentage of workers in each district")
-pipeline = [{"$group": {"_id": "$district",
-                        "total_pop": {"$sum": "$population"},
-                        "workers": {"$sum": {"$add": ["$workers_male", "$workers_female"]}}}},
-            {"$project": {"percentage_workers": {"$multiply": [{"$divide": ["$workers", "$total_pop"]}, 100]}}}]
-st.dataframe(run_pipeline(pipeline))
+df3 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "Workers": {"$sum": "$Workers"},
+        "Population": {"$sum": "$Population"}
+    }},
+    {"$project": {
+        "Percentage_Workers": {"$multiply": [{"$divide": ["$Workers", "$Population"]}, 100]}
+    }}
+])
+st.dataframe(df3)
 
-# 4. Households with LPG/PNG
-st.subheader("4️⃣ Households with LPG/PNG as cooking fuel")
-pipeline = [{"$group": {"_id": "$district", "lpg_households": {"$sum": "$lpg_png"}}}]
-st.dataframe(run_pipeline(pipeline))
 
-# 5. Religious composition
-st.subheader("5️⃣ Religious composition of each district")
-pipeline = [{"$group": {"_id": "$district",
-                        "hindus": {"$sum": "$hindu"},
-                        "muslims": {"$sum": "$muslim"},
-                        "christians": {"$sum": "$christian"},
-                        "others": {"$sum": "$others"}}}]
-st.dataframe(run_pipeline(pipeline))
+# -------------------------
+# Query 4: Gender ratio (Females per 1000 Males)
+# -------------------------
+st.subheader("4️⃣ Gender ratio in each district (Females per 1000 Males)")
+df4 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "Males": {"$sum": "$Male"},
+        "Females": {"$sum": "$Female"}
+    }},
+    {"$project": {
+        "Gender_Ratio": {"$multiply": [{"$divide": ["$Females", "$Males"]}, 1000]}
+    }}
+])
+st.dataframe(df4)
 
-# 6. Households with internet
-st.subheader("6️⃣ Households with internet access in each district")
-pipeline = [{"$group": {"_id": "$district", "internet_households": {"$sum": "$internet"}}}]
-st.dataframe(run_pipeline(pipeline))
 
-# 7. Educational attainment distribution
-st.subheader("7️⃣ Educational attainment distribution by district")
-pipeline = [{"$group": {"_id": "$district",
-                        "below_primary": {"$sum": "$edu_below_primary"},
-                        "primary": {"$sum": "$edu_primary"},
-                        "middle": {"$sum": "$edu_middle"},
-                        "secondary": {"$sum": "$edu_secondary"}}}]
-st.dataframe(run_pipeline(pipeline))
+# -------------------------
+# Query 5: Literacy rate in each district
+# -------------------------
+st.subheader("5️⃣ Literacy rate in each district")
+df5 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "Literate": {"$sum": "$Literate"},
+        "Population": {"$sum": "$Population"}
+    }},
+    {"$project": {
+        "Literacy_Rate": {"$multiply": [{"$divide": ["$Literate", "$Population"]}, 100]}
+    }}
+])
+st.dataframe(df5)
 
-# 8. Households with transport facilities
-st.subheader("8️⃣ Transport access in each district")
-pipeline = [{"$group": {"_id": "$district",
-                        "bicycles": {"$sum": "$transport_bicycle"},
-                        "cars": {"$sum": "$transport_car"},
-                        "radios": {"$sum": "$transport_radio"},
-                        "tvs": {"$sum": "$transport_tv"}}}]
-st.dataframe(run_pipeline(pipeline))
 
-# 9. Condition of census houses
-st.subheader("9️⃣ Condition of occupied census houses")
-pipeline = [{"$group": {"_id": "$district",
-                        "dilapidated": {"$sum": "$house_dilapidated"},
-                        "separate_kitchen": {"$sum": "$house_separate_kitchen"},
-                        "bathing_facility": {"$sum": "$house_bathing"},
-                        "latrine_facility": {"$sum": "$house_latrine"}}}]
-st.dataframe(run_pipeline(pipeline))
+# -------------------------
+# Query 6: Rural vs Urban households
+# -------------------------
+st.subheader("6️⃣ Rural vs Urban households in each district")
+df6 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "Rural_Households": {"$sum": "$Rural_Households"},
+        "Urban_Households": {"$sum": "$Urban_Households"}
+    }}
+])
+st.dataframe(df6)
 
-# 10. Household size distribution
-st.subheader("🔟 Household size distribution in each district")
-pipeline = [{"$group": {"_id": "$district",
-                        "1_person": {"$sum": "$hh_size_1"},
-                        "2_persons": {"$sum": "$hh_size_2"},
-                        "3to5_persons": {"$sum": "$hh_size_3to5"}}}]
-st.dataframe(run_pipeline(pipeline))
 
-# 11. Total households in each state
-st.subheader("1️⃣1️⃣ Total households in each state")
-pipeline = [{"$group": {"_id": "$state", "total_households": {"$sum": "$total_households"}}}]
-st.dataframe(run_pipeline(pipeline))
+# -------------------------
+# Query 7: Age distribution (0-29, 30-49, 50+)
+# -------------------------
+st.subheader("7️⃣ Age distribution in each district")
+df7 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "Young_and_Adult": {"$sum": "$Age_Group_0_29"},
+        "Middle_Aged": {"$sum": "$Age_Group_30_49"},
+        "Senior_Citizen": {"$sum": "$Age_Group_50"}
+    }}
+])
+st.dataframe(df7)
 
-# 12. Households with latrine within premises
-st.subheader("1️⃣2️⃣ Households with latrine facility in each state")
-pipeline = [{"$group": {"_id": "$state", "latrine_within": {"$sum": "$latrine_within"}}}]
-st.dataframe(run_pipeline(pipeline))
 
-# 13. Average household size
-st.subheader("1️⃣3️⃣ Average household size in each state")
-pipeline = [{"$group": {"_id": "$state",
-                        "total_people": {"$sum": "$population"},
-                        "total_households": {"$sum": "$total_households"}}},
-            {"$project": {"avg_hh_size": {"$divide": ["$total_people", "$total_households"]}}}]
-st.dataframe(run_pipeline(pipeline))
+# -------------------------
+# Query 8: Households with LPG or PNG
+# -------------------------
+st.subheader("8️⃣ Households with LPG/PNG")
+df8 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "LPG_Households": {"$sum": "$LPG_or_PNG_Households"}
+    }}
+])
+st.dataframe(df8)
 
-# 14. Owned vs Rented
-st.subheader("1️⃣4️⃣ Owned vs Rented households in each state")
-pipeline = [{"$group": {"_id": "$state",
-                        "owned": {"$sum": "$owned"},
-                        "rented": {"$sum": "$rented"}}}]
-st.dataframe(run_pipeline(pipeline))
 
-# 15. Types of latrine facilities
-st.subheader("1️⃣5️⃣ Types of latrine facilities in each state")
-pipeline = [{"$group": {"_id": "$state",
-                        "pit_latrine": {"$sum": "$latrine_pit"},
-                        "flush_latrine": {"$sum": "$latrine_flush"}}}]
-st.dataframe(run_pipeline(pipeline))
+# -------------------------
+# Query 9: Households with Internet
+# -------------------------
+st.subheader("9️⃣ Households with Internet")
+df9 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "Internet_Households": {"$sum": "$Households_with_Internet"}
+    }}
+])
+st.dataframe(df9)
 
-# 16. Drinking water near premises
-st.subheader("1️⃣6️⃣ Drinking water near premises in each state")
-pipeline = [{"$group": {"_id": "$state", "drinking_water_near": {"$sum": "$drinking_water_near"}}}]
-st.dataframe(run_pipeline(pipeline))
 
-# 17. Average household income distribution
-st.subheader("1️⃣7️⃣ Average household income distribution in each state")
-pipeline = [{"$group": {"_id": "$state", "avg_income": {"$avg": "$avg_income"}}}]
-st.dataframe(run_pipeline(pipeline))
+# -------------------------
+# Query 10: Households with TV, Computer, Phone & Vehicle
+# -------------------------
+st.subheader("🔟 Households with TV, Computer, Phone & Vehicle")
+df10 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "HH_TV_PC_Phone_Vehicle": {"$sum": "$Households_with_TV_Computer_Laptop_Telephone_mobile_phone_and_Scooter_Car"}
+    }}
+])
+st.dataframe(df10)
 
-# 18. Married couples with different household sizes
-st.subheader("1️⃣8️⃣ Married couples with household sizes in each state")
-pipeline = [{"$group": {"_id": "$state", "married_couples": {"$sum": "$married_couples"}}}]
-st.dataframe(run_pipeline(pipeline))
 
-# 19. Overall literacy rate
-st.subheader("1️⃣9️⃣ Overall literacy rate in each state")
-pipeline = [{"$group": {"_id": "$state",
-                        "literate": {"$sum": {"$add": ["$literate_male", "$literate_female"]}},
-                        "population": {"$sum": "$population"}}},
-            {"$project": {"literacy_rate": {"$multiply": [{"$divide": ["$literate", "$population"]}, 100]}}}]
-st.dataframe(run_pipeline(pipeline))
+# -------------------------
+# Query 11: Dilapidated houses
+# -------------------------
+st.subheader("1️⃣1️⃣ Dilapidated households")
+df11 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "HH_Dilapidated": {"$sum": "$Condition_of_occupied_census_houses_Dilapidated_Households"}
+    }}
+])
+st.dataframe(df11)
 
+
+# -------------------------
+# Query 12: Households with Latrine facilities
+# -------------------------
+st.subheader("1️⃣2️⃣ Households with latrine facilities")
+df12 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "Flush_Other": {"$sum": "$Type_of_latrine_facility_Flush_pour_flush_latrine_connected_to_other_system_Households"}
+    }}
+])
+st.dataframe(df12)
+
+
+# -------------------------
+# Query 13: Drinking water from wells, handpumps, borewells
+# -------------------------
+st.subheader("1️⃣3️⃣ Drinking water sources (Well/Handpump/Borewell)")
+df13 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "Well": {"$sum": "$Main_source_of_drinking_water_Un_covered_well_Households"},
+        "Handpump": {"$sum": "$Main_source_of_drinking_water_Handpump_Tubewell_Borewell_Households"}
+    }}
+])
+st.dataframe(df13)
+
+
+# -------------------------
+# Query 14: Households with electricity
+# -------------------------
+st.subheader("1️⃣4️⃣ Households with electricity")
+df14 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "Electricity_Households": {"$sum": "$Housholds_with_Electric_Lighting"}
+    }}
+])
+st.dataframe(df14)
+
+
+# -------------------------
+# Query 15: Population by religion
+# -------------------------
+st.subheader("1️⃣5️⃣ Population by religion in each district")
+df15 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "Hindus": {"$sum": "$Hindus"},
+        "Muslims": {"$sum": "$Muslims"},
+        "Christians": {"$sum": "$Christians"},
+        "Sikhs": {"$sum": "$Sikhs"},
+        "Buddhists": {"$sum": "$Buddhists"},
+        "Jains": {"$sum": "$Jains"}
+    }}
+])
+st.dataframe(df15)
+
+
+# -------------------------
+# Query 16: Education levels
+# -------------------------
+st.subheader("1️⃣6️⃣ Education distribution in each district")
+df16 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "Below_Primary": {"$sum": "$Below_Primary_Education"},
+        "Primary": {"$sum": "$Primary_Education"},
+        "Secondary": {"$sum": "$Secondary_Education"},
+        "Graduate": {"$sum": "$Graduate_Education"}
+    }}
+])
+st.dataframe(df16)
+
+
+# -------------------------
+# Query 17: Household size distribution
+# -------------------------
+st.subheader("1️⃣7️⃣ Household size distribution")
+df17 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "HH_1_2": {"$sum": "$Household_size_1_to_2_persons"},
+        "HH_3_5": {"$sum": "$Household_size_3_to_5_persons"},
+        "HH_6_8": {"$sum": "$Household_size_6_8_persons"},
+        "HH_9+": {"$sum": "$Household_size_9_persons_and_above_Households"}
+    }}
+])
+st.dataframe(df17)
+
+
+# -------------------------
+# Query 18: Ownership of houses
+# -------------------------
+st.subheader("1️⃣8️⃣ Ownership of houses")
+df18 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "Owned": {"$sum": "$Ownership_Owned_Households"},
+        "Rented": {"$sum": "$Ownership_Rented_Households"}
+    }}
+])
+st.dataframe(df18)
+
+
+# -------------------------
+# Query 19: Power parity distribution
+# -------------------------
+st.subheader("1️⃣9️⃣ Power parity distribution")
+df19 = run_query([
+    {"$group": {
+        "_id": "$District name",
+        "Below_45k": {"$sum": "$Power_Parity_Less_than_Rs_45000"},
+        "Rs_45k_90k": {"$sum": "$Power_Parity_Rs_45000_90000"},
+        "Rs_90k_150k": {"$sum": "$Power_Parity_Rs_90000_150000"},
+        "Above_5L": {"$sum": "$Power_Parity_Above_Rs_545000"}
+    }}
+])
+st.dataframe(df19)
